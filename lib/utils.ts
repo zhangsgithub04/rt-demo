@@ -10,5 +10,6 @@ export function getApiKey(): string | null {
 
 export function clearApiKey(): void {
   // Placeholder for backward compatibility
+  // this is test
   return;
 }
