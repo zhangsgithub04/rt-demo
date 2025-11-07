@@ -1,0 +1,45 @@
+<html>
+  <head>
+    <title>Realtime Loopback</title>
+    <meta charset="utf-8">
+    <link rel="icon" href="../favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="../main.css">    
+  </head>
+  <body>    
+    <div class="container">  
+      <div class="header">
+        <a href="../index.html">Realtime Demos</a>
+        <span class="header-icon">🔁</span>
+        <span class="header-title">Loopback</span>
+      </div>    
+      <div>
+        This demo connects your microphone to the OpenAI <a href="https://platform.openai.com/docs/guides/realtime" target="_blank">Realtime API</a>.
+        When you finish speaking, the demo will echo back what you said. You can adjust the noise reduction settings using the dropdown below.
+      </div>
+      <div>
+        <label for="openai-api-key"><a href="https://platform.openai.com/settings/organization/api-keys" target="_blank">API Key</a></label>
+        <input id="openai-api-key" type="password" placeholder="Enter your OpenAI API key here"/>
+      </div>
+      <div>
+        <label for="noise-reduction">Noise Reduction</label>
+        <select id="noise-reduction">
+          <option></option>
+          <option>far_field</option>
+          <option>near_field</option>
+        </select>
+      </div>   
+      <div class="controls-row">
+        <div class="buttons-group">
+          <button id="start-microphone" onclick="startMicrophone()">Start Mic</button>
+          <button id="stop" onclick="stop()">Stop</button>
+        </div>
+        <div class="status-indicator">
+          <span id="status"></span>
+        </div>
+      </div>
+      <p class="github-link"><a href="https://github.com/juberti/demos/tree/main/realtime/noise_reduction">GitHub</a></p>      <p class="github-link"><a href="https://github.com/juberti/demos/tree/main/realtime/basic">GitHub</a></p>
+    </div>
+    <script src="../session.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
