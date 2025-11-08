@@ -1,25 +1,33 @@
 /**
- * API route for session management
- * This would handle creating Realtime sessions server-side
+ * API route for OpenAI Realtime sessions (App Router)
+ * Handles authentication server-side to keep API keys secure
  */
 
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
+import { OpenAI } from 'openai';
 
-type ResponseData = {
-  sessionId?: string;
-  clientSecret?: string;
-  error?: string;
-};
+export async function POST(request: NextRequest) {
+  try {
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
-export default function handler(req: NextApiRequest, res: NextApiResponse<ResponseData>) {
-  if (req.method === 'POST') {
-    // This is a placeholder for server-side session management
-    // In a real implementation, this would create a session token
-    // and securely exchange it with the OpenAI API
+    const response = await client.beta.realtime.sessions.create({
+      model: 'gpt-4o-realtime-preview-2024-12-17',
+      voice: 'alloy',
+    });
 
-    const sessionId = `session_${Date.now()}`;
-    res.status(200).json({ sessionId, clientSecret: 'placeholder' });
-  } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Session creation failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export function GET() {
+  return NextResponse.json(
+    { error: 'Method not allowed' },
+    { status: 405 }
+  );
 }
