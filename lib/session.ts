@@ -89,7 +89,10 @@ export class Session {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(sessionConfig),
+        body: JSON.stringify({
+          action: 'create',
+          sessionConfig: sessionConfig,
+        }),
       });
 
       console.log('Backend response status:', backendResponse.status);
@@ -112,7 +115,6 @@ export class Session {
       if (!backendData.clientSecret) {
         throw new Error('Invalid backend response: missing clientSecret');
       }
-      
       const clientSecret = backendData.clientSecret;
 
       console.log('Sending SDP offer through backend');

@@ -41,15 +41,12 @@ export default async function handler(
       if (!sdp) {
         return res.status(400).json({ error: 'Missing SDP offer' });
       }
-      if (!clientSecret) {
-        return res.status(400).json({ error: 'Missing clientSecret' });
-      }
 
-      // Make the SDP request to OpenAI
+      // Make the SDP request to OpenAI using the API key directly
       const sdpResponse = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${clientSecret}`,
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
           'Content-Type': 'application/sdp',
         },
         body: sdp,
