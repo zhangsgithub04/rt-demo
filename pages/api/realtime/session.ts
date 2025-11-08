@@ -1,6 +1,6 @@
 /**
  * API route for OpenAI Realtime sessions
- * Handles authentication server-side to keep API keys secure
+ * Handles both session creation and SDP exchange server-side to keep API keys secure
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -16,18 +16,58 @@ export default async function handler(
   }
 
   try {
+    const { action, sdp, clientSecret } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ error: 'Missing action parameter' });
+    }
+
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const response = await client.beta.realtime.sessions.create({
-      model: 'gpt-4o-realtime-preview-2024-12-17',
-      voice: 'alloy',
-    });
+    if (action === 'create') {
+      // Create a new session
+      const response = await client.beta.realtime.sessions.create({
+        model: 'gpt-4o-realtime-preview-2024-12-17',
+        voice: 'alloy',
+      });
 
-    return res.status(200).json(response);
+      return res.status(200).json({
+        clientSecret: response.client_secret,
+      });
+    } else if (action === 'sdp') {
+      // Handle SDP offer/answer exchange
+      if (!sdp) {
+        return res.status(400).json({ error: 'Missing SDP offer' });
+      }
+      if (!clientSecret) {
+        return res.status(400).json({ error: 'Missing clientSecret' });
+      }
+
+      // Make the SDP request to OpenAI
+      const sdpResponse = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${clientSecret}`,
+          'Content-Type': 'application/sdp',
+        },
+        body: sdp,
+      });
+
+      if (!sdpResponse.ok) {
+        const errorText = await sdpResponse.text();
+        console.error('SDP exchange failed:', sdpResponse.status, errorText);
+        return res.status(sdpResponse.status).json({ error: errorText });
+      }
+
+      const answer = await sdpResponse.text();
+      return res.status(200).json({ answer });
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
   } catch (error) {
-    console.error('Session creation failed:', error);
+    console.error('Session request failed:', error);
     const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ error: message });
   }

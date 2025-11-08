@@ -115,20 +115,25 @@ export class Session {
       
       const clientSecret = backendData.clientSecret;
 
-      console.log('Sending SDP offer to realtime endpoint');
-      sdpResponse = await fetch(`${realtimeUrl}`, {
+      console.log('Sending SDP offer through backend');
+      
+      // Send SDP exchange through backend for security
+      const backendSdpResponse = await fetch('/api/realtime/session', {
         method: 'POST',
-        body: offer.sdp,
         headers: {
-          Authorization: `Bearer ${clientSecret}`,
-          'Content-Type': 'application/sdp',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          action: 'sdp',
+          sdp: offer.sdp,
+          clientSecret: clientSecret,
+        }),
       });
 
-      console.log('SDP response status:', sdpResponse.status);
+      console.log('Backend SDP response status:', backendSdpResponse.status);
 
-      if (!sdpResponse.ok) {
-        const errorText = await sdpResponse.text();
+      if (!backendSdpResponse.ok) {
+        const errorText = await backendSdpResponse.text();
         let errorMsg = errorText;
         try {
           const errorJson = JSON.parse(errorText);
@@ -136,8 +141,12 @@ export class Session {
         } catch (e) {
           // Not JSON, use raw text
         }
-        throw new Error(`SDP exchange failed: ${sdpResponse.status} - ${errorMsg}`);
+        throw new Error(`Backend SDP exchange failed: ${backendSdpResponse.status} - ${errorMsg}`);
       }
+
+      const backendData2 = await backendSdpResponse.json();
+      const sdp = backendData2.answer;
+      return { type: 'answer' as const, sdp };
     } else {
       const formData = new FormData();
       formData.append('session', JSON.stringify(sessionConfig));
@@ -153,10 +162,10 @@ export class Session {
         const errorText = await sdpResponse.text();
         throw new Error(`Failed to signal: ${sdpResponse.status} - ${errorText}`);
       }
-    }
 
-    const sdp = await sdpResponse.text();
-    return { type: 'answer' as const, sdp };
+      const sdp = await sdpResponse.text();
+      return { type: 'answer' as const, sdp };
+    }
   }
 
   sendMessage(message: any) {
