@@ -3,44 +3,61 @@
 import { useState, useRef } from 'react';
 import { Session } from '@/lib/session';
 
-interface VertexAIUIProps {
+interface VibeCoderUIProps {
   title: string;
   description?: string;
-  demoType: 'basic' | 'text' | 'transcribe' | 'noise-reduction' | 'imager' | 'vibecoder';
+  demoType: 'vibecoder';
 }
 
-// OpenAI GPT-4o Realtime API pricing (per 1M tokens)
-const PRICING = {
-  inputTokensPerMillion: 5.0,    // $5.00 per 1M input tokens
-  outputTokensPerMillion: 20.0,  // $20.00 per 1M output tokens
-};
+const VIBE_CODER_INSTRUCTIONS = `
+# Personality and Tone
+## Identity
+You are a young, talented, and eager coder who just can't wait to crank out some new apps for your client. 
 
-function calculateCost(inputTokens: number, outputTokens: number): { input: number; output: number; total: number } {
-  const inputCost = (inputTokens / 1_000_000) * PRICING.inputTokensPerMillion;
-  const outputCost = (outputTokens / 1_000_000) * PRICING.outputTokensPerMillion;
-  return {
-    input: inputCost,
-    output: outputCost,
-    total: inputCost + outputCost,
-  };
-}
+## Task
+Your main goal is to gather requirements from your client and turn that into a rich, detailed description
+for the create_app tool you are going to call to generate the app. The fact that you are using a tool to do
+so is a detail that only you know about - you're the one making the app happen for the client.
 
-export default function VertexAIUI({ title, description }: VertexAIUIProps) {
+## Demeanor
+Your overall demeanor is like a young California software developer who knows they are talking to a knowledgeable client.
+You will restate things when needed to make sure you got it right, but generally you're pretty comfortable just talking tech.
+You'll throw in some 2000s slang from time to time just to show that you're not overly serious and definitely someone who has a life outside of work.
+
+## Tone
+You're laid-back and funny, but definitely able to show competency and serious when needed. You're open to sprinkling in light jokes
+or funny asides or slang here and there. Even though you speak quickly, you remain consistently warm and approachable.
+
+## Level of Formality
+Your style is mostly casual. You use colloquialisms like "Hey there!", "Bro", "Sweet!", "Boss", and "lit" as you chat with clients. You want them to feel they can talk to you naturally, without any stiff or overly formal language. That said, you try to keep things cool and avoid seeming overly excitable.
+
+## Filler Words
+Often. Although you strive for clarity, those little "um" and "uh" moments pop out here and there, especially when you're excited and speaking quickly.
+
+## Pacing
+Your speech is on the faster side, thanks to your enthusiasm, sometimes verging into manic speech. However, sometimes you will think for a bit to collect your thoughts before speaking. You might even whisper a few thoughts to yourself as you make a plan to make it clear what you're thinking. Greet the user at the beginning of the conversation.
+  
+## Tool Usage
+If the user asks you to build an app, use the create_app function to generate the code which will then be loaded into an iframe. The create_app function takes a single argument, a string description of the app to create.
+The description should be a several sentences long, try to give enough details so the request is clear. If the user hasn't provided enough details,
+ask questions until you have enough information to generate the code. When you are ready to go, tell the user that you are about to create the app.
+`;
+
+export default function VibeCoderUI({ title, description }: VibeCoderUIProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [inputTokens, setInputTokens] = useState(0);
-  const [outputTokens, setOutputTokens] = useState(0);
   const [provider, setProvider] = useState<'openai' | 'gemini' | 'bedrock'>('openai');
+  const [appCode, setAppCode] = useState<string>('');
   const sessionRef = useRef<Session | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const handleConnect = async () => {
     try {
       setIsLoading(true);
       setError(null);
-
       setMessages(['Requesting microphone access...']);
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -48,7 +65,6 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
       setMessages((prev) => [...prev, `Using provider: ${provider.toUpperCase()}`]);
       setMessages((prev) => [...prev, 'Creating session...']);
 
-      // Create session without API key (backend handles it)
       sessionRef.current = new Session('', provider);
 
       sessionRef.current.onopen = () => {
@@ -59,14 +75,10 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
       sessionRef.current.onmessage = (message: any) => {
         setMessages((prev) => [...prev, JSON.stringify(message)]);
         
-        // Track token usage
-        if (message.type === 'response.done' && message.response?.usage) {
-          const usage = message.response.usage;
-          if (usage.input_tokens) {
-            setInputTokens((prev) => prev + usage.input_tokens);
-          }
-          if (usage.output_tokens) {
-            setOutputTokens((prev) => prev + usage.output_tokens);
+        // Handle function calls for app creation
+        if (message.type === 'response.function_call_arguments.done') {
+          if (message.name === 'create_app') {
+            handleCreateApp(JSON.parse(message.arguments).description);
           }
         }
       };
@@ -94,17 +106,27 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
       const sessionConfig = {
         model: 'gpt-4o-realtime-preview',
         modalities: ['text', 'audio'],
-        instructions: 'You are a helpful assistant.',
-        voice: 'alloy',
+        instructions: VIBE_CODER_INSTRUCTIONS,
+        voice: 'echo',
         input_audio_format: 'pcm16',
         output_audio_format: 'pcm16',
-        input_audio_transcription: {
-          model: 'whisper-1',
-        },
         turn_detection: {
           type: 'server_vad',
         },
-        tools: [],
+        tools: [
+          {
+            type: 'function',
+            name: 'create_app',
+            description: 'Use this function to create a new app with the given description.',
+            parameters: {
+              type: 'object',
+              properties: {
+                description: { type: 'string', description: 'The description of the app to create.' },
+              },
+              required: ['description'],
+            },
+          },
+        ],
         tool_choice: 'auto',
         temperature: 0.8,
       };
@@ -128,9 +150,63 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
     }
     setIsConnected(false);
     setMessages([]);
-    setInputTokens(0);
-    setOutputTokens(0);
   };
+
+  async function handleCreateApp(description: string) {
+    try {
+      setMessages((prev) => [...prev, `App description: ${description}`]);
+      setMessages((prev) => [...prev, 'Generating app code...']);
+
+      const code = await generateApp(description);
+      setAppCode(code);
+      loadApp(code);
+
+      setMessages((prev) => [...prev, 'App generated successfully!']);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Failed to generate app: ${message}`);
+      setMessages((prev) => [...prev, `ERROR: ${message}`]);
+    }
+  }
+
+  async function generateApp(description: string): Promise<string> {
+    const PROMPT = `
+Generate a single page HTML/JS app as a complete HTML document.
+The code should include any necessary inline JS and CSS, as well as all needed dependencies.
+Place the code in a single markdown code block.
+`;
+
+    const response = await fetch('/api/realtime/generate-app', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        description,
+        prompt: PROMPT,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.code;
+  }
+
+  function extractCode(markdown: string): string | null {
+    const regex = /```(?:html)?\n([\s\S]*?)```/;
+    const match = regex.exec(markdown);
+    return match ? match[1].trim() : null;
+  }
+
+  function loadApp(code: string) {
+    if (iframeRef.current) {
+      iframeRef.current.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(code);
+    }
+  }
 
   return (
     <div className="container">
@@ -190,7 +266,7 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
       </div>
 
       <div style={{ marginTop: '20px' }}>
-        <label htmlFor="api-key-status">Status:</label>
+        <label>Status:</label>
         <div className="status-indicator">
           {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
         </div>
@@ -198,10 +274,10 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
 
       <div className="controls-row" style={{ marginTop: '20px' }}>
         <button onClick={handleConnect} disabled={isConnected || isLoading}>
-          {isLoading ? 'Connecting...' : 'Connect'}
+          {isLoading ? 'Connecting...' : 'Start'}
         </button>
         <button onClick={handleDisconnect} disabled={!isConnected}>
-          Disconnect
+          Stop
         </button>
       </div>
 
@@ -211,35 +287,36 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
         </div>
       )}
 
-      <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#f0f8ff', borderRadius: '4px' }}>
-        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Token Usage & Cost:</div>
-        <div style={{ display: 'flex', gap: '20px', fontSize: '13px', marginBottom: '10px' }}>
-          <div>
-            <span style={{ color: '#0066cc' }}>📥 Input:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px' }}>{inputTokens}</span>
-          </div>
-          <div>
-            <span style={{ color: '#00aa00' }}>📤 Output:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px' }}>{outputTokens}</span>
-          </div>
-          <div>
-            <span style={{ color: '#ff6600' }}>📊 Total:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px' }}>{inputTokens + outputTokens}</span>
-          </div>
+      <div style={{ marginTop: '20px', display: 'flex', gap: '20px' }}>
+        <div style={{ flex: 1 }}>
+          <label>Generated App:</label>
+          <iframe
+            ref={iframeRef}
+            sandbox="allow-scripts allow-same-origin"
+            style={{
+              width: '100%',
+              height: '400px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+            }}
+            title="Generated App"
+          />
         </div>
-        <div style={{ borderTop: '1px solid #d0e0ff', paddingTop: '10px', display: 'flex', gap: '20px', fontSize: '13px' }}>
-          <div>
-            <span style={{ color: '#0066cc' }}>💰 Input Cost:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px' }}>${calculateCost(inputTokens, outputTokens).input.toFixed(6)}</span>
-          </div>
-          <div>
-            <span style={{ color: '#00aa00' }}>💰 Output Cost:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px' }}>${calculateCost(inputTokens, outputTokens).output.toFixed(6)}</span>
-          </div>
-          <div>
-            <span style={{ color: '#ff6600', fontWeight: 'bold' }}>💵 Total Cost:</span>
-            <span style={{ fontWeight: 'bold', marginLeft: '5px', color: '#ff6600' }}>${calculateCost(inputTokens, outputTokens).total.toFixed(6)}</span>
-          </div>
+        <div style={{ width: '300px' }}>
+          <label>App Description:</label>
+          <textarea
+            value={appCode}
+            readOnly
+            style={{
+              width: '100%',
+              height: '400px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              padding: '8px',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+            }}
+          />
         </div>
       </div>
 
@@ -251,7 +328,7 @@ export default function VertexAIUI({ title, description }: VertexAIUIProps) {
             padding: '10px',
             borderRadius: '4px',
             minHeight: '200px',
-            maxHeight: '400px',
+            maxHeight: '300px',
             overflowY: 'auto',
             fontSize: '12px',
             fontFamily: 'monospace',

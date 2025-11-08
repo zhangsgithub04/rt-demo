@@ -1,10 +1,10 @@
-import VertexAIUI from '@/components/VertexAIUI';
+import VibeCoderUI from '@/components/VibeCoderUI';
 
-export default function VivecoderDemo() {
+export default function VibeCoderDemo() {
   return (
-    <VertexAIUI
-      title="🧑‍💻 Vibe Coding Demo"
-      description="Demonstrates how to delegate to a reasoning model for code generation."
+    <VibeCoderUI
+      title="🧑‍💻 Vibe Coder"
+      description="Chat with a voice-based coder agent to generate HTML/JS apps. Describe what you want to build and let the AI coder make it happen!"
       demoType="vibecoder"
     />
   );

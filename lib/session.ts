@@ -3,6 +3,7 @@
  */
 export class Session {
   private apiKey: string;
+  private provider: 'openai' | 'gemini' | 'bedrock';
   private useSessionToken: boolean = true;
   private ms: MediaStream | null = null;
   private pc: RTCPeerConnection | null = null;
@@ -14,8 +15,9 @@ export class Session {
   onmessage?: (message: any) => void;
   onerror?: (error: Error) => void;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, provider: 'openai' | 'gemini' | 'bedrock' = 'openai') {
     this.apiKey = apiKey;
+    this.provider = provider;
   }
 
   async start(stream: MediaStream, sessionConfig: any) {
@@ -91,6 +93,7 @@ export class Session {
         },
         body: JSON.stringify({
           action: 'create',
+          provider: this.provider,
           sessionConfig: sessionConfig,
         }),
       });
@@ -127,8 +130,8 @@ export class Session {
         },
         body: JSON.stringify({
           action: 'sdp',
+          provider: this.provider,
           sdp: offer.sdp,
-          clientSecret: clientSecret,
         }),
       });
 
